@@ -104,7 +104,7 @@ void *brute_force_thread(void *thread_data_ptr)
         for (int i = 0; i < KEY_LENGTH; i++)
             printf("%02X", current_key[i]);
 
-        printf("Plaintext: %s\n", decrypted_text);
+        printf("\nPlaintext: %s\n", decrypted_text);
 
         // We found the key, so we can terminate the program completely.
         exit(0);    
