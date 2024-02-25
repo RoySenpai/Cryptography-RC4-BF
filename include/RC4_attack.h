@@ -34,13 +34,6 @@
  */
 DWORD WINAPI brute_force_thread(LPVOID thread_data_ptr);
 
-/*
- * @brief The function to be called by the counting thread to print the progress of the brute force attack.
- * @param lpParam A pointer to the thread data.
- * @return The exit code of the thread.
- * @note Windows way of defining a thread function.
- */
-DWORD WINAPI count_keys_checked(LPVOID lpParam);
 #else
 #include <pthread.h>
 
@@ -52,13 +45,6 @@ DWORD WINAPI count_keys_checked(LPVOID lpParam);
  */
 void *brute_force_thread(void *thread_data_ptr);
 
-/*
- * @brief The function to be called by the counting thread to print the progress of the brute force attack.
- * @param lpParam A pointer to the thread data.
- * @return The exit code of the thread.
- * @note POSIX way of defining a thread function.
- */
-void *count_keys_checked(void *lpParam);
 #endif
 
 #endif // _RC4_ATTACK_H

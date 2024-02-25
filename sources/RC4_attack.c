@@ -23,6 +23,11 @@
 #include <stdint.h>
 #include <time.h>
 
+#define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
+#define PBWIDTH 60
+
+int isRunning = 1;
+
 int main(void) {
 	unsigned char key[KEY_LENGTH] = {0};
 	unsigned char state[STATE_LENGTH] = {0};
@@ -48,6 +53,32 @@ int main(void) {
 	printf("Starting brute force attack...\n");
 	printf("Number of threads: %d\n", NUM_THREADS);
 	printf("Keyspace bits: %d bits\n", KEYSPACE_BITS);
+	printf("Possible keys: %llu\n", KEYSPACE_SIZE);
+
+// Some windows garbage fix for printf
+#ifdef _WIN32
+			printf("\r%.4f%% [%.*s%*s]; Keys checked: %llu", 
+					0.0000, 
+					(0 * PBWIDTH), 
+					PBSTR, 
+					PBWIDTH, 
+					"", 
+					0
+			);
+			fflush(stdout);
+		//);
+#else
+			printf("\r%.4f%% [%.*s%*s]; Keys checked: %u", 
+					0.0000, 
+					(0 * PBWIDTH), 
+					PBSTR, 
+					PBWIDTH, 
+					"", 
+					0
+			);
+
+			fflush(stdout);
+#endif
 
 	ThreadData thread_data[NUM_THREADS];
 
@@ -77,20 +108,76 @@ int main(void) {
 #endif
 	}
 
+// Windows compatibility layer
 #ifdef _WIN32
-	CreateThread(NULL, 0, count_keys_checked, (void *)thread_data, 0, NULL);
-	WaitForMultipleObjects(NUM_THREADS, threads, TRUE, INFINITE);
-
 	for (int i = 0; i < NUM_THREADS; i++)
 		CloseHandle(threads[i]);
-#else
-	pthread_t count_thread;
-	pthread_create(&count_thread, NULL, count_keys_checked, (void *)thread_data);
-
-	for (int i = 0; i < NUM_THREADS; i++)
-		pthread_join(threads[i], NULL);
 
 #endif
+
+	// Randomly generate a verbose interval to print the progress of the brute force attack
+	// Used to avoid printing too many times, but still print enough to show progress.
+	uint64_t verbose_interval = (rand64() % 1000000) + 1000000;
+
+	// Busy wait until all threads have finished
+	// Print the progress of the brute force attack.
+	while (isRunning)
+	{
+		uint64_t total_keys_checked = 0;
+
+		for (int i = 0; i < NUM_THREADS; i++)
+			total_keys_checked += thread_data[i].total_keys_checked;
+
+		if (total_keys_checked % verbose_interval == 0)
+		{
+			double percentage = (double)total_keys_checked / KEYSPACE_SIZE;
+			double val = (percentage * 100);
+			int lpad = (int) (percentage * PBWIDTH);
+			int rpad = PBWIDTH - lpad;
+// Some windows garbage fix for printf
+#ifdef _WIN32
+			printf("\r%.4f%% [%.*s%*s]; Keys checked: %llu", 
+					val, 
+					lpad, 
+					PBSTR, 
+					rpad, 
+					"", 
+					total_keys_checked
+			);
+			fflush(stdout);
+		//);
+#else
+			printf("\r%.4f%% [%.*s%*s]; Keys checked: %lu", 
+					val, 
+					lpad, 
+					PBSTR, 
+					rpad, 
+					"", 
+					total_keys_checked
+			);
+
+			fflush(stdout);
+#endif
+
+		}
+
+		if (total_keys_checked >= KEYSPACE_SIZE)
+			break;
+	}
+
+// Windows compatibility layer
+#ifdef _WIN32
+	// Terminate all threads
+	for (int i = 0; i < NUM_THREADS; i++)
+		TerminateThread(threads[i], 0);
+#else
+	// Terminate all threads
+	for (int i = 0; i < NUM_THREADS; i++)
+		pthread_cancel(threads[i]);
+#endif
+
+	printf("\nPress Enter to exit...\n");
+	getchar();
 
 	return 0;
 }
@@ -113,7 +200,7 @@ void *brute_force_thread(void *thread_data_ptr)
 
 	memcpy(ciphertext, thread_data->ciphertext, PLAINTEXT_LENGTH + 1);
 
-	for (uint64_t key = start_key; key < end_key; key++)
+	for (uint64_t key = start_key; key < end_key && isRunning; key++)
 	{
 		++thread_data->total_keys_checked;
 
@@ -143,7 +230,7 @@ void *brute_force_thread(void *thread_data_ptr)
 			continue;
 
 		// Print the key and the decrypted text
-		printf("Key found: 0x");
+		printf("\nKey found: 0x");
 
 		for (int i = 0; i < KEY_LENGTH; i++)
 			printf("%02x", current_key[i]);
@@ -151,56 +238,7 @@ void *brute_force_thread(void *thread_data_ptr)
 		printf("\nPlaintext: %s\n", decrypted_text);
 
 		// We found the key, so we can terminate the program completely.
-		exit(0);
-	}
-
-// Windows compatibility layer
-#ifdef _WIN32
-	return 0;
-#else
-	return NULL;
-#endif
-}
-
-#ifdef _WIN32
-DWORD WINAPI count_keys_checked(LPVOID lpParam) // Windows compatibility layer
-#else
-void *count_keys_checked(void *lpParam)
-#endif
-{
-	PThreadData thread_data = (PThreadData)lpParam;
-
-	// Randomly generate a verbose interval to print the progress of the brute force attack
-	// Used to avoid printing too many times, but still print enough to show progress.
-	uint64_t verbose_interval = KEYSPACE_SIZE / (rand64() % 1000 + 100);
-
-	// Busy wait until all threads have finished
-	// Print the progress of the brute force attack.
-	while (1)
-	{
-		uint64_t total_keys_checked = 0;
-
-		for (int i = 0; i < NUM_THREADS; i++)
-			total_keys_checked += thread_data[i].total_keys_checked;
-
-		if (total_keys_checked % verbose_interval == 0)
-// Some windows garbage fix for printf
-#ifdef _WIN32
-			printf("Keys checked: %llu/%llu, Progress: %.4f%%\n", 
-			total_keys_checked, 
-			KEYSPACE_SIZE, 
-			(double)total_keys_checked / KEYSPACE_SIZE * 100
-		);
-#else
-			printf("Keys checked: %lu/%llu, Progress: %.4f%%\n", 
-			total_keys_checked, 
-			KEYSPACE_SIZE, 
-			(double)total_keys_checked / KEYSPACE_SIZE * 100
-		);
-#endif
-
-		if (total_keys_checked >= KEYSPACE_SIZE)
-			break;
+		isRunning = 0;
 	}
 
 // Windows compatibility layer
